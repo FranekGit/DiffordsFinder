@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
@@ -13,6 +12,7 @@ import click
 from ..core.scraper import CocktailScraper
 from ..core.search import CocktailSearcher
 from ..utils.exceptions import DiffordsFinderError, NoResultsError
+from ..utils.formatting import FORMAT_FUNCTIONS, format_cocktail, get_available_formats
 from ..utils.logger import setup_logger
 
 
@@ -28,16 +28,28 @@ from ..utils.logger import setup_logger
     "-o",
     "--output",
     type=click.Path(path_type=Path),
-    help="Output file (JSON format). If not specified, prints to stdout",
+    help="Output file. Format determined by extension (.json, .txt)",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose logging")
-@click.option("--pretty", is_flag=True, help="Pretty print JSON output")
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(get_available_formats() + ["json"], case_sensitive=False),
+    default="pretty",
+    help="Output format (default: pretty)",
+)
+@click.option(
+    "--pretty",
+    is_flag=True,
+    help="Pretty print JSON output (deprecated, use --format json)",
+)
 @click.option("--timeout", type=int, default=10, help="Request timeout in seconds")
 def main(
     query: str,
     non_interactive: bool,
     output: Path | None,
     verbose: bool,
+    output_format: str,
     pretty: bool,
     timeout: int,
 ) -> None:
@@ -45,7 +57,20 @@ def main(
     Search for a cocktail recipe on Difford's Guide.
 
     QUERY: Name of the cocktail to search for
+
+    Output formats:
+    - pretty: Nicely formatted list with emojis and numbering (default)
+    - simple: Clean list without extra formatting
+    - compact: Single-line format
+    - table: Table-like structure
+    - markdown: Markdown format
+    - json: JSON output (machine-readable)
     """
+    # Handle deprecated --pretty flag
+    if pretty:
+        output_format = "json"
+        click.echo("Warning: --pretty is deprecated, use --format json", err=True)
+
     # Setup logging
     log_level = "DEBUG" if verbose else "WARNING"
     logger = setup_logger(level=log_level)
@@ -82,30 +107,50 @@ def main(
             match_confidence=result.relevance_score,
         )
 
-        # Prepare output data
-        output_data = {
-            "name": cocktail.name,
-            "url": cocktail.url,
-            "search_query": cocktail.search_query,
-            "match_confidence": cocktail.match_confidence,
-            "ingredients": {
-                ing.name: {"measure": ing.measure, "unit": ing.unit}
-                for ing in cocktail.ingredients
-            },
-        }
-
-        # Format JSON
-        json_output = json.dumps(
-            output_data, indent=4 if pretty else None, ensure_ascii=False
-        )
+        # Format output based on requested format
+        if output_format.lower() == "json":
+            output_data = {
+                "name": cocktail.name,
+                "url": cocktail.url,
+                "search_query": cocktail.search_query,
+                "match_confidence": cocktail.match_confidence,
+                "ingredients": {
+                    ing.name: {"measure": ing.measure, "unit": ing.unit}
+                    for ing in cocktail.ingredients
+                },
+            }
+            formatted_output = json.dumps(output_data, indent=4, ensure_ascii=False)
+        else:
+            # Use the formatting utilities
+            try:
+                formatted_output = format_cocktail(cocktail, output_format)
+            except ValueError as e:
+                click.echo(f"Error: {e}", err=True)
+                sys.exit(1)
 
         # Output results
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json_output, encoding="utf-8")
+
+            # Auto-detect format from file extension if not explicitly set
+            if output_format == "pretty" and output.suffix.lower() == ".json":
+                # Override to JSON if saving to .json file
+                output_data = {
+                    "name": cocktail.name,
+                    "url": cocktail.url,
+                    "search_query": cocktail.search_query,
+                    "match_confidence": cocktail.match_confidence,
+                    "ingredients": {
+                        ing.name: {"measure": ing.measure, "unit": ing.unit}
+                        for ing in cocktail.ingredients
+                    },
+                }
+                formatted_output = json.dumps(output_data, indent=4, ensure_ascii=False)
+
+            output.write_text(formatted_output, encoding="utf-8")
             click.echo(f"Results saved to: {output}")
         else:
-            click.echo(json_output)
+            click.echo(formatted_output)
 
     except NoResultsError:
         click.echo(f"No cocktails found for '{query}'", err=True)
@@ -145,9 +190,14 @@ def legacy_main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    # Convert to click command
+    # Convert to click command (legacy uses pretty format by default)
     ctx = click.Context(main)
-    ctx.invoke(main, query=args.query, non_interactive=args.non_interactive)
+    ctx.invoke(
+        main,
+        query=args.query,
+        non_interactive=args.non_interactive,
+        output_format="pretty",
+    )
 
 
 if __name__ == "__main__":
