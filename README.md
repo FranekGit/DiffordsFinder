@@ -114,61 +114,6 @@ Recipe URL: https://www.diffordsguide.com/cocktails/recipe/1376/mojito
 }
 ```
 
-## Project Structure
-
-```
-diffords_finder/
-├── cli/               # Command-line interfaces
-│   ├── simple.py     # Basic CLI for single cocktails
-│   └── advanced.py   # Advanced CLI with Excel support
-├── core/             # Core functionality
-│   ├── scraper.py    # Web scraping logic
-│   ├── search.py     # Search algorithms
-│   └── constants.py  # Configuration constants
-├── models/           # Data models
-│   └── cocktail.py   # Cocktail and ingredient models
-└── utils/            # Utility functions
-    ├── excel_handler.py  # Excel import/export
-    ├── formatting.py     # Output formatters
-    └── logger.py         # Logging configuration
-```
-
-## Development
-
-### Running Tests
-```bash
-# Run all tests
-pytest
-
-# With coverage report
-pytest --cov=diffords_finder --cov-report=html
-
-# Run specific test file
-pytest tests/test_search.py
-```
-
-### Code Quality
-```bash
-# Format code with black
-black diffords_finder/
-
-# Lint with ruff
-ruff diffords_finder/
-
-# Type checking
-mypy diffords_finder/
-```
-
-### Pre-commit Hooks
-The project uses pre-commit hooks to maintain code quality:
-```bash
-# Run hooks manually
-pre-commit run --all-files
-
-# Update hooks
-pre-commit autoupdate
-```
-
 ## Configuration
 
 ### Environment Variables
